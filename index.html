@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pytest-facts · unit tests for LLM answers</title>
+<meta name="description" content="Write an LLM's claims as assert lines, run them against a source of truth, get pytest-style PASS / FAIL / SKIP. Retrieval + NLI, fully in the browser.">
+<meta property="og:title" content="pytest-facts · unit tests for LLM answers">
+<meta property="og:description" content="assert &quot;claim&quot; against a source of truth: retrieval + NLI in the browser, pytest-style output.">
+<meta property="og:image" content="docs/screenshot.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23121211'/%3E%3Crect x='4' y='4' width='8' height='8' fill='%23ff5a1f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try{const t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+:root{
+  --bg:#f4f3ef;--surface:#eae8e2;--card:#fbfaf7;--ink:#121211;--ink-2:#55534d;--ink-3:#8a877f;
+  --line:#dcd9d1;--accent:#ff5a1f;--accent-ink:#c2410c;--ok:#3d7a4f;--ok-bg:#3d7a4f1a;
+  --sans:'Geist',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Geist Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --pad:16px;--max:1240px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d0d0c;--surface:#171715;--card:#121211;--ink:#ecebe6;--ink-2:#a3a199;--ink-3:#6f6d67;
+  --line:#262623;--accent:#ff6a33;--accent-ink:#ff8a5c;--ok:#7fb98d;--ok-bg:#7fb98d1f;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d0d0c;--surface:#171715;--card:#121211;--ink:#ecebe6;--ink-2:#a3a199;--ink-3:#6f6d67;
+  --line:#262623;--accent:#ff6a33;--accent-ink:#ff8a5c;--ok:#7fb98d;--ok-bg:#7fb98d1f;color-scheme:dark}
+@media (min-width:720px){:root{--pad:32px}}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+::selection{background:var(--accent);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--pad)}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.01em;text-transform:lowercase}
+.muted{color:var(--ink-3)}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid transparent}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:56px;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.logo i{width:9px;height:9px;background:var(--accent);display:block}
+.nav ul{display:flex;align-items:center;gap:22px;list-style:none;margin:0;padding:0}
+.nav li a{color:var(--ink-2);font-size:14px;transition:color .2s}
+.nav li a:hover{color:var(--ink)}
+.theme{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;color:var(--ink-2)}
+.theme svg{width:16px;height:16px}
+@media (max-width:719px){.nav ul{gap:14px}.hide-sm{display:none}}
+
+/* hero */
+.hero{padding-top:56px;padding-bottom:8px}
+.kicker{color:var(--ink-3)}
+h1{font-weight:500;font-size:clamp(34px,6vw,76px);line-height:1.02;letter-spacing:-.045em;margin:18px 0 0;max-width:14em;text-wrap:balance}
+h1 em{font-style:normal;color:var(--ink-3)}
+.sub{max-width:38em;margin:22px 0 0;color:var(--ink-2);font-size:clamp(16px,1.6vw,19px);line-height:1.5}
+.sub code{font-family:var(--mono);font-size:.9em;color:var(--ink)}
+
+/* demo */
+.demo{margin-top:40px;border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+.bar-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+#presets{display:flex;flex-wrap:wrap;gap:6px}
+.preset{font-family:var(--mono);font-size:12px;text-transform:lowercase;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--ink-2);background:var(--card);transition:border-color .15s,color .15s}
+.preset span{color:var(--ink-3)}
+.preset:hover{color:var(--ink)}
+.preset[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.run{display:inline-flex;align-items:center;gap:10px;height:38px;padding:0 16px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:500;font-size:14px;transition:opacity .15s}
+.run:hover{opacity:.88}
+.run:disabled{opacity:.6;cursor:progress}
+.run kbd{font-family:var(--mono);font-size:11px;opacity:.6}
+.run i{width:7px;height:7px;background:var(--accent);display:block;border-radius:1px}
+.run.busy i{animation:blink .8s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+.editors{display:grid;grid-template-columns:1fr}
+@media (min-width:900px){.editors{grid-template-columns:1fr 1fr}.editors .ed+.ed{border-left:1px solid var(--line)}}
+.ed{display:flex;flex-direction:column;min-width:0}
+.ed+.ed{border-top:1px solid var(--line)}
+@media (min-width:900px){.ed+.ed{border-top:0}}
+.ed-head{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px dashed var(--line);color:var(--ink-3)}
+.ed-head b{font-weight:500;color:var(--ink)}
+textarea{display:block;width:100%;border:0;resize:vertical;background:transparent;color:var(--ink);font:400 13px/1.6 var(--mono);padding:14px;outline:none;min-height:300px;tab-size:4}
+textarea:focus-visible{outline:none;background:color-mix(in srgb,var(--surface) 35%,transparent)}
+#src{font-family:var(--sans);font-size:14px;line-height:1.6}
+.code{display:flex;min-width:0}
+#gutter{flex:none;width:38px;padding:14px 8px 14px 0;text-align:right;color:var(--ink-3);font:400 13px/1.6 var(--mono);overflow:hidden;white-space:pre;user-select:none;border-right:1px solid var(--line);height:auto}
+#tests{white-space:pre;overflow:auto}
+
+.out{border-top:1px solid var(--line)}
+#term{margin:0;padding:16px 14px 18px;font:400 12.5px/1.6 var(--mono);color:var(--ink);white-space:pre-wrap;word-break:break-word;min-height:170px;background:var(--bg)}
+#term .dim{color:var(--ink-3)}
+#term .ok{color:var(--ok)}
+#term .bad{color:var(--accent-ink)}
+#term .skip{color:var(--ink-2)}
+#term b{font-weight:500}
+#term a.tl{border-radius:3px}
+#term a.tl:hover{background:var(--surface)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 14px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:12px;color:var(--ink-3);text-transform:lowercase}
+.meta b{font-weight:500;color:var(--ink)}
+.meta:empty{display:none}
+
+#ev-head{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--line);color:var(--ink-3)}
+.ev{border-top:1px solid var(--line)}
+.ev summary{list-style:none;display:grid;grid-template-columns:auto 1fr auto;align-items:baseline;gap:4px 12px;padding:12px 14px;cursor:pointer}
+.ev summary::-webkit-details-marker{display:none}
+.ev summary:hover{background:var(--surface)}
+.ev[open] summary{background:var(--surface)}
+.chip{font-family:var(--mono);font-size:11px;font-weight:500;padding:2px 7px;border-radius:5px;letter-spacing:.02em}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.bad{color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.chip.skip{color:var(--ink-2);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.ev[open] .chip.skip{background:var(--card)}
+.claim{font-size:15px;min-width:0}
+.pp{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.lab{grid-column:2/4;font-family:var(--mono);font-size:11px;color:var(--ink-3);text-transform:lowercase}
+.lab.miss{color:var(--accent-ink)}
+.ev ol{list-style:none;margin:0;padding:4px 14px 16px;display:grid;gap:10px}
+@media (min-width:900px){.ev ol{grid-template-columns:repeat(3,1fr);padding-left:62px}}
+.ev li{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card);display:flex;flex-direction:column;gap:8px}
+.ev li.used{border-color:var(--ink-3)}
+.ev-top{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.ev-top .rank{color:var(--ink)}
+.ev-top .why{color:var(--ink);margin-left:auto}
+.ev li p{margin:0;font-size:14px;line-height:1.5}
+.ctx{color:var(--ink-3)}
+.bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surface);margin-top:auto}
+.bar i{display:block;height:100%}
+.bar .e{background:var(--ok)}.bar .c{background:var(--accent)}.bar .n{background:var(--line)}
+.probs{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.probs .pe{color:var(--ok)}.probs .pc{color:var(--accent-ink)}
+.demo-note{margin:12px 0 0;color:var(--ink-3)}
+
+/* write-up */
+section.doc{padding-top:88px}
+.sec-label{color:var(--ink-3);display:flex;gap:12px;align-items:center;border-top:1px solid var(--line);padding-top:14px}
+h2{font-weight:500;font-size:clamp(26px,3.6vw,42px);letter-spacing:-.04em;line-height:1.08;margin:18px 0 0;max-width:20em;text-wrap:balance}
+.prose{max-width:42em;color:var(--ink-2);font-size:17px}
+.prose p{margin:18px 0 0}
+.prose code,.steps code,td code{font-family:var(--mono);font-size:.86em;color:var(--ink)}
+.prose strong{color:var(--ink);font-weight:500}
+.steps{list-style:none;margin:32px 0 0;padding:0;display:grid;grid-template-columns:1fr;border-top:1px solid var(--line)}
+@media (min-width:720px){.steps{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1080px){.steps{grid-template-columns:repeat(4,1fr)}}
+.steps li{padding:20px 20px 24px 0;border-bottom:1px solid var(--line);color:var(--ink-2);font-size:15px}
+@media (min-width:720px){.steps li{padding-left:20px;border-left:1px solid var(--line)}.steps li:nth-child(2n+1){border-left:0;padding-left:0}}
+@media (min-width:1080px){.steps li:nth-child(2n+1){border-left:1px solid var(--line);padding-left:20px}.steps li:first-child{border-left:0;padding-left:0}}
+.steps b{display:block;font-family:var(--mono);font-size:12px;font-weight:400;color:var(--ink-3);margin-bottom:10px}
+.steps h3{margin:0 0 8px;font-weight:500;font-size:18px;letter-spacing:-.02em;color:var(--ink)}
+
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:32px}
+@media (min-width:900px){.metrics{grid-template-columns:repeat(4,1fr)}}
+.metric{padding:22px 16px 24px 0}
+.metric:nth-child(even){padding-left:16px;border-left:1px solid var(--line)}
+.metric:nth-child(n+3){border-top:1px solid var(--line)}
+@media (min-width:900px){.metric{padding-left:16px;border-left:1px solid var(--line)}.metric:first-child{border-left:0;padding-left:0}.metric:nth-child(n+3){border-top:0}}
+.metric b{display:block;font-weight:500;font-size:clamp(30px,4vw,44px);letter-spacing:-.04em;line-height:1}
+.metric span{display:block;margin-top:10px;color:var(--ink-2);font-size:14px;line-height:1.4}
+
+.tbl{margin-top:28px;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-family:var(--mono);font-size:12px;font-weight:400;color:var(--ink-3);text-transform:lowercase}
+td.n{font-family:var(--mono);font-size:13px;white-space:nowrap}
+.miss-c{color:var(--accent-ink)}
+@media (max-width:599px){table{min-width:0}thead{display:none}tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}tr:last-child{border-bottom:0}td{display:block;border:0;padding:3px 14px}td.n{display:inline-block;padding-right:0}td.n:nth-child(2)::before{content:'label ';color:var(--ink-3)}td.n:nth-child(3)::before{content:'→ got ';color:var(--ink-3)}td:last-child{color:var(--ink-2);font-size:13px}}
+
+.cols{display:grid;grid-template-columns:1fr;gap:0 48px}
+@media (min-width:900px){.cols{grid-template-columns:1fr 1fr}}
+.list{list-style:none;padding:0;margin:24px 0 0;border-top:1px solid var(--line)}
+.list li{padding:16px 0;border-bottom:1px solid var(--line);color:var(--ink-2);font-size:16px}
+.list li strong{color:var(--ink);font-weight:500}
+.list code{font-family:var(--mono);font-size:.86em;color:var(--ink)}
+
+footer{margin-top:96px;border-top:1px solid var(--line)}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding-top:20px;padding-bottom:40px;color:var(--ink-3)}
+footer a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="logo" href="./"><i></i>pytest-facts</a>
+    <ul>
+      <li><a href="https://temirlanzzz.github.io">&larr; temirlan</a></li>
+      <li><a href="https://github.com/temirlanzzz/pytest-facts">github</a></li>
+      <li><button class="theme" id="theme" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg></button></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <div class="mono kicker">retrieval + nli · runs in your browser · no api keys</div>
+  <h1>Unit tests for LLM answers. <em>Assert the claims, cite the source.</em></h1>
+  <p class="sub">Paste a source of truth, write what the model said as <code>assert "claim"</code> lines, and each claim comes back PASS (the source says so), FAIL (the source says otherwise) or SKIP (the source doesn't say).</p>
+</header>
+
+<main class="wrap">
+  <div class="demo" id="demo">
+    <div class="bar-top">
+      <div id="presets" aria-label="Examples"></div>
+      <button class="run" id="run" type="button"><i></i>Run tests <kbd>ctrl+enter</kbd></button>
+    </div>
+    <div class="editors">
+      <div class="ed">
+        <div class="ed-head mono"><span><b>conftest.py</b> · source of truth</span><span id="src-count"></span></div>
+        <textarea id="src" spellcheck="false" aria-label="Source of truth" rows="14"></textarea>
+      </div>
+      <div class="ed">
+        <div class="ed-head mono"><span><b>test_llm_answer.py</b> · the claims</span><span id="test-count"></span></div>
+        <div class="code">
+          <div id="gutter" aria-hidden="true"></div>
+          <textarea id="tests" spellcheck="false" aria-label="Claims as assert lines" rows="14" wrap="off"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="out">
+      <pre id="term" aria-live="polite"><span class="dim">$ pytest -v test_llm_answer.py</span>
+press <b>Run tests</b>. The first run downloads two small models (~115 MB) into your browser cache; after that everything runs offline-fast on your machine.</pre>
+      <div class="meta" id="meta"></div>
+      <div id="ev-head" class="mono" hidden><span>evidence · top-3 sentences per claim</span><span>entail / contra / neutral</span></div>
+      <div id="evidence"></div>
+    </div>
+  </div>
+  <p class="demo-note mono">grey text in an evidence card is the context the nli model also saw · "label" is my hand label for preset claims</p>
+
+  <section class="doc" id="how">
+    <div class="sec-label mono"><span>01</span><span>how it works</span></div>
+    <h2>Every claim gets three pieces of evidence and a three-way verdict.</h2>
+    <ol class="steps">
+      <li><b>split</b><h3>Sentences</h3>The source is cut on <code>. ! ?</code> followed by a space and a capital letter, so “Python 3.0” and “$50.00” stay whole.</li>
+      <li><b>context</b><h3>Premises</h3>Each sentence is glued to the sentences its pronouns point back to, plus the document's first sentence, so “It was first released in 1991” knows what “it” is.</li>
+      <li><b>retrieve</b><h3>Top-3 by cosine</h3><code>all-MiniLM-L6-v2</code> embeds premises and claims; the three closest premises become the claim's evidence.</li>
+      <li><b>judge</b><h3>NLI cross-encoder</h3><code>nli-deberta-v3-xsmall</code> (int8 ONNX) scores each (premise, claim) pair. Any entailment ≥ 0.5 → PASS, else any contradiction ≥ 0.5 → FAIL, else SKIP.</li>
+    </ol>
+    <div class="prose">
+      <p>Both models run through <code>transformers.js</code> 3.8.1 on onnxruntime-web (WebAssembly, one thread, since GitHub Pages can't send the cross-origin-isolation headers needed for more). The NLI label order is read from the model's own <code>config.json</code> (<code>0 contradiction, 1 entailment, 2 neutral</code>) rather than hard-coded. There's no server: the page is static files and the weights come from the Hugging Face hub.</p>
+    </div>
+  </section>
+
+  <section class="doc" id="results">
+    <div class="sec-label mono"><span>02</span><span>measured results</span></div>
+    <h2>7 of 8 on the set I tuned on, 12 of 14 on claims I wrote before tuning.</h2>
+    <div class="metrics">
+      <div class="metric"><b>12/14</b><span>held-out claims correct (3 sources, written and committed before any tuning)</span></div>
+      <div class="metric"><b>7/8</b><span>tuning sample correct (the python preset)</span></div>
+      <div class="metric"><b>2.3 s</b><span>median 8-claim run (24 nli pairs) once models are loaded · 1.9–4.1 s over 25 runs</span></div>
+      <div class="metric"><b>1.3–1.7 s</b><span>model load from browser cache · 9.8–10.9 s on a cold cache</span></div>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>claim</th><th>label</th><th>got</th><th>why</th></tr></thead>
+        <tbody>
+          <tr><td>Python 3.0 is fully backward-compatible with Python 2 <span class="muted mono">tuning</span></td><td class="n">FAIL</td><td class="n miss-c">SKIP</td><td>The right sentence is retrieved (“not completely backward-compatible”) but the model calls “fully” vs “not completely” neutral, 0.99.</td></tr>
+          <tr><td>Guido van Rossum worked at Google <span class="muted mono">held-out</span></td><td class="n">SKIP</td><td class="n miss-c">FAIL</td><td>“created by Guido van Rossum at CWI” reads as a contradiction (1.00): the model treats “worked at X” as exclusive.</td></tr>
+          <tr><td>Northwind Audio offers a two-year warranty on all products <span class="muted mono">held-out</span></td><td class="n">SKIP</td><td class="n miss-c">FAIL</td><td>A policy that lists what's allowed gets read as ruling everything else out (contradiction 0.89 from the 30-day returns sentence).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>Over all 22 labelled claims: 9/9 PASS, 8/9 FAIL and 2/4 SKIP were right. Both held-out misses are the same failure: <strong>a claim the source is silent about gets called false</strong>. Thresholds barely matter, because this model's probabilities are almost always above 0.9 or below 0.1; every passAt/failAt pair I tried between 0.3 and 0.9 scored the same on the tuning set. What moved the score was how much context each premise gets (below).</p>
+      <p>Timings are from headless Chrome 155 on my Windows desktop (16 logical cores, but the WASM backend uses one). The 8-claim figure is 5 repeats after a warm-up in each of 5 page loads; “cold” is 3 fresh browser profiles downloading ~115 MB on a fast connection. The first click in the UI also pays a one-time warm-up, so it took 2.2–3.7 s. Accuracy was identical on every repeat. You can re-run the whole eval in your own browser at <a href="eval.html"><code>eval.html</code></a>.</p>
+    </div>
+  </section>
+
+  <section class="doc" id="learned">
+    <div class="sec-label mono"><span>03</span><span>what I learned</span></div>
+    <h2>The model was fine. The sentences I was feeding it weren't.</h2>
+    <div class="cols">
+      <ul class="list">
+        <li><strong>Pronouns break sentence-level NLI, and retrieval too.</strong> With bare sentences the sample scored 4/8: in my first version “It was created by Guido van Rossum” didn't even make the top 3 for “Python was created by Guido van Rossum”, because the embedding doesn't know what “it” is.</li>
+        <li><strong>“Previous sentence” isn't enough.</strong> Adding just the previous sentence (6/8) fails on chains like “It was created… It was first released in 1991”. Walking back to the last sentence that names its subject, plus the document's first sentence for “The language…”, got 7/8.</li>
+      </ul>
+      <ul class="list">
+        <li><strong>Context has a price.</strong> Gluing the first sentence everywhere means “The tower is 330 metres tall” can “prove” the tower is in Paris. The verdict is right, but the evidence card is less precise, so I show the context in grey instead of hiding it.</li>
+        <li><strong>Off-topic contradictions are common.</strong> “Python 3.0 was released in 2008” contradicts “Python was first released in 1991” with 0.95. I let any strong entailment win before looking at contradictions: with previous-sentence premises that scored 6/8 vs 5/8 for “take the larger of the two”; with the final premises both rules score 7/8.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="doc" id="limits">
+    <div class="sec-label mono"><span>04</span><span>limits</span></div>
+    <h2>A small model with a bias towards “false”.</h2>
+    <ul class="list prose">
+      <li><strong>Silent ≠ false, but it often says false.</strong> 2 of 4 SKIP claims came back FAIL. Treat a FAIL as “go check”, not as proof.</li>
+      <li><strong>22 labelled claims is a small eval.</strong> It shows the failure modes; it can't give a precise accuracy.</li>
+      <li><strong>No real numeric reasoning.</strong> Mismatched years worked here (“completed in 1899” vs “1887 to 1889”), but ranges, units and arithmetic are not checked.</li>
+      <li><strong>One claim per line, judged alone.</strong> Long, compound claims (“A and B”) should be split; the splitter also breaks on abbreviations like “Dr. Smith”.</li>
+      <li><strong>The LLM answers are hand-written.</strong> I wrote the claims to look like typical model output; they aren't sampled from a real model.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap mono">
+    <span>temirlan zarymkanov · mit license</span>
+    <span><a href="https://github.com/temirlanzzz/pytest-facts">source</a> · <a href="eval.html">eval</a> · <a href="https://temirlanzzz.github.io">portfolio</a></span>
+  </div>
+</footer>
+
+<script>
+(function(){const root=document.documentElement;document.getElementById('theme').onclick=()=>{const dark=root.dataset.theme?root.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;root.dataset.theme=dark?'light':'dark';try{localStorage.setItem('theme',root.dataset.theme)}catch(e){}}})();
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
