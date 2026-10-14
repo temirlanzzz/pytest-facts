@@ -83,7 +83,3 @@ tools/cdp.mjs   tiny Chrome DevTools driver used for eval and screenshots
 - No real numeric reasoning (years mostly work; ranges, units and arithmetic don't).
 - One claim per line, judged alone; compound claims should be split. The splitter breaks on abbreviations like "Dr. Smith".
 - The "LLM answers" in the presets are hand-written, not sampled from a model.
-
-## License
-
-MIT
