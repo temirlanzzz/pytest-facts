@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pytest-facts · eval</title>
+<style>
+body{margin:0;padding:24px 16px;background:#f4f3ef;color:#121211;font:13px/1.5 'Geist Mono',ui-monospace,Consolas,monospace}
+@media (prefers-color-scheme:dark){body{background:#0d0d0c;color:#ecebe6}}
+pre{white-space:pre-wrap;word-break:break-word;max-width:1000px}
+a{color:inherit}
+</style>
+</head>
+<body>
+<p><a href="./">&larr; pytest-facts</a> · labelled eval, runs entirely in this tab</p>
+<pre id="out">loading models…</pre>
+<script type="module">
+import { loadModels, runTests, verdict, CONFIG, splitSentences } from './js/core.js';
+import { SOURCES, TUNING, HELDOUT } from './js/data.js';
+
+const out = document.getElementById('out');
+const log = (s) => { out.textContent += '\n' + s; };
+const cfg = { ...CONFIG };
+
+async function evalSet(set, c = cfg) {
+  const bySrc = {};
+  set.forEach((x, i) => (bySrc[x.src] ||= []).push(i));
+  const rows = [];
+  let runMs = 0;
+  for (const [src, idx] of Object.entries(bySrc)) {
+    const r = await runTests(SOURCES[src], idx.map((i) => set[i].claim), c);
+    runMs += r.ms.total;
+    r.results.forEach((res, k) => rows.push({ ...set[idx[k]], res }));
+  }
+  return { rows, runMs };
+}
+const score = (rows, c) => rows.filter((r) => verdict(r.res.evidence, c).outcome === r.label).length;
+const fmt = (r) => {
+  const v = r.res;
+  const ev = v.evidence.map((e) => `      cos ${e.cos.toFixed(2)} E ${e.entail.toFixed(2)} C ${e.contra.toFixed(2)} N ${e.neutral.toFixed(2)}  ${e.sentence.slice(0, 72)}`).join('\n');
+  return `${v.outcome === r.label ? 'ok  ' : 'MISS'} ${r.label}->${v.outcome}  ${r.claim}\n${ev}`;
+};
+
+try {
+  out.textContent = 'loading models…';
+  const load = await loadModels();
+  log(`model load: ${load.ms.toFixed(0)} ms   id2label: ${JSON.stringify(load.id2label)}`);
+
+  const w0 = performance.now();
+  await runTests(SOURCES.python, ['Python is a language'], cfg);
+  log(`first inference (warm-up): ${(performance.now() - w0).toFixed(0)} ms`);
+
+  // ---- 1. design choices, scored on the TUNING set only
+  const q = new URLSearchParams(location.search);
+  if (q.has('sweep')) {
+    log('\n== sweep on tuning set (premise, embedOn, rule, passAt, failAt): correct/8');
+    for (const premise of ['sent', 'prev', 'chain', 'doc']) for (const embedOn of ['sentence', 'premise']) {
+      const base = { ...cfg, premise, embedOn };
+      const t = await evalSet(TUNING, base);
+      const cells = [];
+      for (const rule of ['max', 'entail-first']) for (const passAt of [0.3, 0.5, 0.7]) for (const failAt of [0.5, 0.7, 0.9])
+        cells.push(`${rule[0]}${passAt}/${failAt}:${score(t.rows, { ...base, rule, passAt, failAt })}`);
+      log(`${premise.padEnd(5)} ${embedOn.padEnd(8)} ${cells.join(' ')}`);
+    }
+  }
+
+  // ---- 2. the shipped config
+  log(`\nconfig: ${JSON.stringify(cfg)}`);
+  const sampleClaims = TUNING.map((t) => t.claim);
+  const times = [];
+  for (let i = 0; i < 5; i++) times.push((await runTests(SOURCES.python, sampleClaims, cfg)).ms.total);
+  log(`8-claim sample run (5x): ${times.map((t) => t.toFixed(0)).join(', ')} ms`);
+
+  const tune = await evalSet(TUNING);
+  const sets = [['tuning (sample)', tune]];
+  if (!q.has('nohold')) sets.push(['held-out', await evalSet(HELDOUT)]);
+  const acc = {};
+  for (const [name, st] of sets) {
+    const ok = st.rows.filter((r) => r.res.outcome === r.label).length;
+    acc[name] = [ok, st.rows.length];
+    log(`\n== ${name}: ${ok}/${st.rows.length}  (claims run in ${st.runMs.toFixed(0)} ms)`);
+    st.rows.forEach((r) => log(fmt(r)));
+  }
+  const all = sets.flatMap(([, st]) => st.rows);
+  const conf = {};
+  all.forEach((r) => { const k = `${r.label}->${r.res.outcome}`; conf[k] = (conf[k] || 0) + 1; });
+  window.__EVAL = {
+    load: load.ms, sampleRuns: times, acc, confusion: conf,
+    misses: all.filter((r) => r.res.outcome !== r.label).map((r) => `${r.claim}: ${r.label}->${r.res.outcome}`),
+    ua: navigator.userAgent, cores: navigator.hardwareConcurrency,
+  };
+  log('\nDONE ' + JSON.stringify(window.__EVAL));
+} catch (e) {
+  log('ERROR ' + (e.stack || e));
+  window.__EVAL = { error: String(e) };
+}
+</script>
+</body>
+</html>
